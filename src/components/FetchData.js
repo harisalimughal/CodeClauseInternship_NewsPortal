@@ -8,15 +8,40 @@ const FetchData = ({ cat }) => {
   const [filteredData, setFilteredData] = useState([]);
 
   const fetchData = useCallback(async () => {
-    const apiUrl = cat
-      ? `https://newsapi.org/v2/top-headlines?country=in&category=${cat}&apiKey=d0cb8c771f4d4cc291ac6feaa54024b3`
-      : `https://newsapi.org/v2/top-headlines?country=in&apiKey=d0cb8c771f4d4cc291ac6feaa54024b3`;
+    const apiKey = process.env.REACT_APP_NEWS_API_KEY;
+    const country = "in";
+    const categoryParam = cat ? `&category=${cat}` : "";
+    const topHeadlinesUrl = `https://newsapi.org/v2/top-headlines?country=${country}${categoryParam}&apiKey=${apiKey}`;
+    const fallbackUrl = `https://newsapi.org/v2/top-headlines?country=${country}&apiKey=${apiKey}`;
+    const everythingUrl = `https://newsapi.org/v2/everything?q=${cat || "india"}&language=en&pageSize=20&apiKey=${apiKey}`;
+
+    console.log("API Key loaded:", apiKey ? "Yes" : "No");
+    console.log("Fetching from URL:", topHeadlinesUrl);
 
     try {
-      const response = await axios.get(apiUrl);
-      return response.data.articles || [];
+      const response = await axios.get(topHeadlinesUrl);
+      console.log("API Response:", response.data);
+      const articles = response.data.articles || [];
+
+      if (articles.length > 0) {
+        return articles;
+      }
+
+      console.warn("No articles found for category, trying fallback routes...");
+
+      if (cat) {
+        const fallbackResponse = await axios.get(fallbackUrl);
+        const fallbackArticles = fallbackResponse.data.articles || [];
+        if (fallbackArticles.length > 0) {
+          return fallbackArticles;
+        }
+      }
+
+      const everythingResponse = await axios.get(everythingUrl);
+      console.log("Everything API Response:", everythingResponse.data);
+      return everythingResponse.data.articles || [];
     } catch (error) {
-      console.error("Error fetching data:", error);
+      console.error("Error fetching data:", error.response?.data || error.message);
       return [];
     }
   }, [cat]);
@@ -56,57 +81,48 @@ const FetchData = ({ cat }) => {
     <div className="container my-4">
       <SearchBar onSearch={handleSearch} />
 
-      <div
-        className="container d-flex justify-content-center align-items-center flex-column my-3"
-        style={{ minHeight: "100vh" }}
-      >
+      <div className="row justify-content-center g-4 mt-3">
         {articlesToDisplay.length > 0 ? (
           articlesToDisplay.map((items, index) => (
-            <div
-              key={index}
-              className="container my-3 p-3"
-              style={{
-                width: "600px",
-                boxShadow: "2px 2px 10px silver",
-                borderRadius: "10px",
-              }}
-            >
-              <h5 className="my-2">{items.title}</h5>
-              <div className="d-flex justify-content-center align-items-center">
-                {items.urlToVideo ? (
-                  <video
-                    controls
-                    className="img-fluid"
-                    style={{
-                      width: "100%",
-                      height: "300px",
-                      objectFit: "cover",
-                    }}
-                  >
-                    <source src={items.urlToVideo} type="video/mp4" />
-                    Your browser does not support the video tag.
-                  </video>
-                ) : (
+            <div key={index} className="col-12 col-md-10 col-lg-8">
+              <div className="card shadow-sm h-100">
+                {items.urlToImage && (
                   <img
                     src={items.urlToImage}
-                    alt="img not found"
-                    className="img-fluid"
-                    style={{
-                      width: "100%",
-                      height: "300px",
-                      objectFit: "cover",
-                    }}
+                    alt={items.title || 'Article image'}
+                    className="card-img-top"
+                    style={{ height: '320px', objectFit: 'cover' }}
                   />
                 )}
+                <div className="card-body d-flex flex-column">
+                  <h5 className="card-title">{items.title}</h5>
+                  <p className="card-text text-muted mb-2">
+                    {items.source?.name || 'Unknown source'} ·{' '}
+                    {items.publishedAt
+                      ? new Date(items.publishedAt).toLocaleDateString()
+                      : ''}
+                  </p>
+                  <p className="card-text">{items.description || items.content || 'No description available.'}</p>
+                  <div className="mt-auto">
+                    <a
+                      href={items.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn btn-primary btn-sm"
+                    >
+                      Read more
+                    </a>
+                  </div>
+                </div>
               </div>
-              <p className="my-1">{items.content}</p>
-              <Link to={items.url} target="blank">
-                view more
-              </Link>
             </div>
           ))
         ) : (
-          <p>No articles to display.</p>
+          <div className="col-12">
+            <div className="alert alert-info" role="alert">
+              No articles to display. Try another category or search term.
+            </div>
+          </div>
         )}
       </div>
     </div>
