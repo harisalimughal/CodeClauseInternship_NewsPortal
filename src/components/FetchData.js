@@ -4,56 +4,60 @@ import SearchBar from "./SearchBar";
 
 const FetchData = ({ cat }) => {
   const [data, setData] = useState([]);
-  const [filteredData, setFilteredData] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const fetchData = useCallback(async () => {
-    const apiKey = process.env.REACT_APP_NEWS_API_KEY;
-    const country = "in";
-    const categoryParam = cat ? `&category=${cat}` : "";
-    const topHeadlinesUrl = `https://newsapi.org/v2/top-headlines?country=${country}${categoryParam}&apiKey=${apiKey}`;
-    const fallbackUrl = `https://newsapi.org/v2/top-headlines?country=${country}&apiKey=${apiKey}`;
-    const everythingUrl = `https://newsapi.org/v2/everything?q=${cat || "india"}&language=en&pageSize=20&apiKey=${apiKey}`;
+    setLoading(true);
+    setError("");
 
-    console.log("API Key loaded:", apiKey ? "Yes" : "No");
-    console.log("Fetching from URL:", topHeadlinesUrl);
+    const queryString = searchQuery
+      ? `?q=${encodeURIComponent(searchQuery)}`
+      : cat
+      ? `?category=${encodeURIComponent(cat)}`
+      : "";
+
+    const apiUrl = `/.netlify/functions/news${queryString}`;
 
     try {
-      const response = await axios.get(topHeadlinesUrl);
-      console.log("API Response:", response.data);
-      const articles = response.data.articles || [];
+      const response = await axios.get(apiUrl);
+      const responseData = response.data;
 
-      if (articles.length > 0) {
-        return articles;
+      if (responseData.status && responseData.status !== "ok") {
+        throw new Error(responseData.message || "News API returned an error.");
       }
 
-      console.warn("No articles found for category, trying fallback routes...");
+      const articles = responseData.articles || [];
+      setData(articles);
 
-      if (cat) {
-        const fallbackResponse = await axios.get(fallbackUrl);
-        const fallbackArticles = fallbackResponse.data.articles || [];
-        if (fallbackArticles.length > 0) {
-          return fallbackArticles;
-        }
+      if (articles.length === 0) {
+        setError(
+          searchQuery
+            ? "No search results found. Try a different keyword."
+            : "No articles available right now. Try another category."
+        );
       }
 
-      const everythingResponse = await axios.get(everythingUrl);
-      console.log("Everything API Response:", everythingResponse.data);
-      return everythingResponse.data.articles || [];
-    } catch (error) {
-      console.error("Error fetching data:", error.response?.data || error.message);
+      return articles;
+    } catch (fetchError) {
+      const message =
+        fetchError.response?.data?.error || fetchError.message || "Unable to fetch news.";
+      console.error("News fetch error:", message);
+      setError(message);
+      setData([]);
       return [];
+    } finally {
+      setLoading(false);
     }
-  }, [cat]);
+  }, [cat, searchQuery]);
 
   useEffect(() => {
     let mounted = true;
 
     const loadData = async () => {
-      const articles = await fetchData();
-      if (mounted) {
-        setData(articles);
-        setFilteredData([]);
-      }
+      if (!mounted) return;
+      await fetchData();
     };
 
     loadData();
@@ -64,44 +68,49 @@ const FetchData = ({ cat }) => {
   }, [fetchData]);
 
   const handleSearch = (searchTerm) => {
-    if (!searchTerm) {
-      setFilteredData([]);
-      return;
-    }
-    const filteredArticles = data.filter((article) =>
-      article.title?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    setFilteredData(filteredArticles);
+    setSearchQuery(searchTerm || "");
   };
-
-  const articlesToDisplay = filteredData.length > 0 ? filteredData : data;
 
   return (
     <div className="container my-4">
       <SearchBar onSearch={handleSearch} />
 
       <div className="row justify-content-center g-4 mt-3">
-        {articlesToDisplay.length > 0 ? (
-          articlesToDisplay.map((items, index) => (
+        {loading ? (
+          <div className="col-12 text-center">
+            <div className="spinner-border text-primary" role="status">
+              <span className="visually-hidden">Loading...</span>
+            </div>
+          </div>
+        ) : error ? (
+          <div className="col-12">
+            <div className="alert alert-warning" role="alert">
+              {error}
+            </div>
+          </div>
+        ) : data.length > 0 ? (
+          data.map((items, index) => (
             <div key={index} className="col-12 col-md-10 col-lg-8">
               <div className="card shadow-sm h-100">
                 {items.urlToImage && (
                   <img
                     src={items.urlToImage}
-                    alt={items.title || 'Article image'}
+                    alt={items.title || "Article image"}
                     className="card-img-top"
-                    style={{ height: '320px', objectFit: 'cover' }}
+                    style={{ height: "320px", objectFit: "cover" }}
                   />
                 )}
                 <div className="card-body d-flex flex-column">
                   <h5 className="card-title">{items.title}</h5>
                   <p className="card-text text-muted mb-2">
-                    {items.source?.name || 'Unknown source'} ·{' '}
+                    {items.source?.name || "Unknown source"} ·{' '}
                     {items.publishedAt
                       ? new Date(items.publishedAt).toLocaleDateString()
-                      : ''}
+                      : ""}
                   </p>
-                  <p className="card-text">{items.description || items.content || 'No description available.'}</p>
+                  <p className="card-text">
+                    {items.description || items.content || "No description available."}
+                  </p>
                   <div className="mt-auto">
                     <a
                       href={items.url}

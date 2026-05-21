@@ -5,10 +5,8 @@ const SearchBar = ({ onSearch }) => {
 
   const handleSearch = (e) => {
     e.preventDefault();
-    if (!searchTerm.trim()) {
-      return;
-    }
-    onSearch(searchTerm.trim());
+    const trimmedTerm = searchTerm.trim();
+    onSearch(trimmedTerm);
   };
 
   return (
